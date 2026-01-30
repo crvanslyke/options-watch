@@ -1,7 +1,8 @@
 fastapi
 uvicorn
 yfinance
-
+pandas
+numpy
 jinja2
 python-multipart
 requests
