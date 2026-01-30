@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import os
@@ -8,12 +7,13 @@ import sys
 # Add the current directory to sys.path to ensure imports work in Vercel
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Disable yfinance cache for serverless (read-only filesystem)
+import yfinance as yf
+yf.set_tz_cache_location("/tmp")
+
 from screener import get_screener_results, DEFAULT_TICKERS
 
 app = FastAPI()
-
-# Mount static files
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "../static")), name="static")
 
 # Templates
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "../templates"))
