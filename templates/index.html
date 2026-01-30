@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptionsWatch | Lean Screener</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            900: '#111827',
+                            800: '#1f2937',
+                            700: '#374151',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for dark mode feeling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen font-sans antialiased">
+
+    <!-- Navbar -->
+    <nav class="border-b border-gray-800 bg-gray-900/50 backdrop-blur-md fixed w-full z-10 top-0">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-2">
+                    <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                    <span
+                        class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">
+                        OptionsWatch
+                    </span>
+                </div>
+                <div>
+                    <button onclick="runScan()" id="scanBtn"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Scan Market
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold tracking-tight mb-2">Call Option Opportunities</h1>
+            <p class="text-gray-400">Scanning NASDAQ 100 for high-probability setups (Liquidity + Trend + Pullback).</p>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div class="text-sm text-gray-400">Market Status</div>
+                <div class="text-2xl font-bold text-green-400 mt-1">Open</div>
+            </div>
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div class="text-sm text-gray-400">Scanned Tickers</div>
+                <div class="text-2xl font-bold text-white mt-1" id="scannedCount">--</div>
+            </div>
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div class="text-sm text-gray-400">Potential Setups</div>
+                <div class="text-2xl font-bold text-blue-400 mt-1" id="matchCount">--</div>
+            </div>
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div class="text-sm text-gray-400">Avg RSI (Matches)</div>
+                <div class="text-2xl font-bold text-purple-400 mt-1" id="avgRsi">--</div>
+            </div>
+        </div>
+
+        <!-- Results Table -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-2xl">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr
+                            class="bg-gray-900/50 border-b border-gray-700 text-xs uppercase tracking-wider text-gray-400">
+                            <th class="px-6 py-4 font-medium">Ticker</th>
+                            <th class="px-6 py-4 font-medium">Price</th>
+                            <th class="px-6 py-4 font-medium">Trend (SMAs)</th>
+                            <th class="px-6 py-4 font-medium">RSI (14)</th>
+                            <th class="px-6 py-4 font-medium">Vol (20d)</th>
+                            <th class="px-6 py-4 font-medium text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTable" class="divide-y divide-gray-700 text-sm">
+                        <!-- Rows will be injected here -->
+                        <tr>
+                            <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                                Click "Scan Market" to find opportunities.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // State
+        let currentResults = [];
+        let isScanning = false;
+        let abortController = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Populate selector (optional future step, simplified for now)
+        });
+
+        async function runScan() {
+            if (isScanning) return;
+
+            const btn = document.getElementById('scanBtn');
+            const table = document.getElementById('resultsTable');
+            const scannedCountEl = document.getElementById('scannedCount');
+            const matchCountEl = document.getElementById('matchCount');
+
+            // Reset UI
+            isScanning = true;
+            currentResults = []; // Clear previous
+            abortController = new AbortController();
+
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Stop Scan`;
+            btn.onclick = stopScan; // Change button action
+
+            table.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400 animate-pulse">Initializing scan...</td></tr>`;
+            scannedCountEl.innerText = "0";
+            matchCountEl.innerText = "0";
+
+            try {
+                // 1. Fetch Tickers
+                // Default to SP500 for now, or make user selectable
+                const tickersResp = await fetch('/api/tickers');
+                const tickersData = await tickersResp.json();
+                const allTickers = tickersData.sp_500; // Using Broadest list default
+                const totalTickers = allTickers.length;
+
+                // 2. Clear Table for streaming
+                table.innerHTML = '';
+
+                // 3. Batch Processing
+                const BATCH_SIZE = 20; // 20 tickers per request (Safe for Vercel)
+                let scannedCount = 0;
+
+                const batches = chunkArray(allTickers, BATCH_SIZE);
+
+                for (const batch of batches) {
+                    if (abortController.signal.aborted) break;
+
+                    // Update Status
+                    scannedCountEl.innerText = `${scannedCount} / ${totalTickers}`;
+
+                    try {
+                        const batchResp = await fetch('/api/scan_batch', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tickers: batch }),
+                            signal: abortController.signal
+                        });
+
+                        if (!batchResp.ok) continue;
+
+                        const batchData = await batchResp.json();
+                        const newMatches = batchData.results;
+
+                        // Add to global list
+                        currentResults.push(...newMatches);
+                        matchCountEl.innerText = currentResults.length;
+
+                        // Append to Table
+                        if (newMatches.length > 0) {
+                            appendResults(newMatches);
+                        }
+
+                    } catch (err) {
+                        if (err.name === 'AbortError') throw err;
+                        console.error("Batch failed", err);
+                    }
+
+                    scannedCount += batch.length;
+                    scannedCountEl.innerText = `${scannedCount} / ${totalTickers}`;
+                }
+
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log("Scan aborted by user.");
+                } else {
+                    console.error("Scan failed:", error);
+                    table.innerHTML += `<tr><td colspan="6" class="px-6 py-4 text-center text-red-400">Scan interrupted by error.</td></tr>`;
+                }
+            } finally {
+                // Reset State
+                isScanning = false;
+                btn.disabled = false;
+                btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg> Scan Market`;
+                btn.onclick = runScan; // Reset button action
+
+                if (currentResults.length === 0) {
+                    table.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">No opportunities found.</td></tr>`;
+                }
+            }
+        }
+
+        function stopScan() {
+            if (abortController) {
+                abortController.abort();
+            }
+        }
+
+        function chunkArray(myArray, chunk_size) {
+            var results = [];
+            while (myArray.length) {
+                results.push(myArray.splice(0, chunk_size));
+            }
+            return results;
+        }
+
+        function appendResults(results) {
+            const table = document.getElementById('resultsTable');
+            // Remove "Scanning..." or "No results" placeholders if they exist alone
+            if (table.rows.length === 1 && table.rows[0].cells.length === 1) {
+                // table.innerHTML = ''; 
+            }
+
+            let html = '';
+            results.forEach(stock => {
+                const rsi = stock.RSI ? stock.RSI.toFixed(1) : 'N/A';
+                const priceVal = stock.Close || 0;
+                const price = `$${priceVal.toFixed(2)}`;
+                const hv = stock.HV_Rank ? `${stock.HV_Rank.toFixed(1)}%` : 'N/A';
+                const sma50 = stock.SMA_50 || 0;
+                const sma200 = stock.SMA_200 || 0;
+
+                // --- Status Logic ---
+
+                // Trend
+                // Green if > SMA50 and > SMA200
+                // Yellow if > SMA200 but < SMA50 (Warning) - though our filter removes these currently.
+                let trendIcon = '';
+                if (priceVal > sma50 && priceVal > sma200) {
+                    trendIcon = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> Bullish
+                     </span>`;
+                } else {
+                    trendIcon = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> Weak
+                     </span>`;
+                }
+
+                // RSI
+                // Green (Ideal Pullback): 40-60
+                // Red (Overbought/Oversold): <30 or >70
+                // Yellow: Borderline
+                let rsiBadge = '';
+                if (stock.RSI >= 40 && stock.RSI <= 60) {
+                    rsiBadge = `<div class="text-green-400 font-bold">${rsi} <span class="text-xs font-normal text-gray-500 block">Pullback Zone</span></div>`;
+                } else if (stock.RSI < 30) {
+                    rsiBadge = `<div class="text-red-400 font-bold">${rsi} <span class="text-xs font-normal text-gray-500 block">Oversold</span></div>`;
+                } else if (stock.RSI > 70) {
+                    rsiBadge = `<div class="text-red-400 font-bold">${rsi} <span class="text-xs font-normal text-gray-500 block">Overbought</span></div>`;
+                } else {
+                    rsiBadge = `<div class="text-yellow-400 font-bold">${rsi} <span class="text-xs font-normal text-gray-500 block">Neutral</span></div>`;
+                }
+
+                // Volatility Colors
+                let volColor = 'text-gray-300';
+                if (stock.HV_Rank < 30) volColor = 'text-green-400';
+                else if (stock.HV_Rank > 50) volColor = 'text-red-400';
+                else volColor = 'text-yellow-400';
+
+                html += `
+                <tr class="hover:bg-gray-800/50 transition-colors animate-fade-in-up border-b border-gray-800 last:border-0">
+                    <td class="px-6 py-4">
+                        <div class="font-bold text-white text-base">${stock.Ticker}</div>
+                        
+                    </td>
+                    <td class="px-6 py-4 text-gray-300 font-mono font-medium">${price}</td>
+                    <td class="px-6 py-4">
+                        ${trendIcon}
+                        <div class="text-[10px] text-gray-500 mt-1">vs SMA50: <span class="${priceVal > sma50 ? 'text-green-500' : 'text-red-500'}">${((priceVal / sma50 - 1) * 100).toFixed(1)}%</span></div>
+                    </td> 
+                    <td class="px-6 py-4">
+                        ${rsiBadge}
+                    </td>
+                    <td class="px-6 py-4 ${volColor} font-mono">
+                        ${hv}
+                         <span class="text-[10px] text-gray-500 block">20d Hist.</span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <a href="https://finance.yahoo.com/quote/${stock.Ticker}" target="_blank" class="inline-flex items-center gap-1 text-blue-400 hover:text-white text-xs font-semibold bg-blue-500/10 hover:bg-blue-600 border border-blue-500/30 px-4 py-2 rounded-lg transition-all shadow-lg shadow-blue-500/10">
+                            Analyze
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                        </a>
+                    </td>
+                </tr>
+                `;
+            });
+
+            // Insert HTML
+            table.insertAdjacentHTML('beforeend', html);
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+yfinance
+polars
+jinja2
+python-multipart
+requests
