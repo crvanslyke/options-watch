@@ -55,7 +55,16 @@
                         OptionsWatch
                     </span>
                 </div>
-                <div>
+                <div class="flex items-center gap-3">
+                    <button onclick="downloadCSV()" id="downloadBtn" disabled
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-all border border-gray-600 text-gray-300 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Download Selected <span id="selectedCount"
+                            class="ml-1 text-xs bg-gray-800 px-1.5 py-0.5 rounded-full hidden">0</span>
+                    </button>
                     <button onclick="runScan()" id="scanBtn"
                         class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,6 +113,10 @@
                     <thead>
                         <tr
                             class="bg-gray-900/50 border-b border-gray-700 text-xs uppercase tracking-wider text-gray-400">
+                            <th class="px-6 py-4 font-medium w-12">
+                                <input type="checkbox" id="selectAll" onclick="toggleAll()"
+                                    class="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800 transition-colors cursor-pointer">
+                            </th>
                             <th class="px-6 py-4 font-medium">Ticker</th>
                             <th class="px-6 py-4 font-medium">Price</th>
                             <th class="px-6 py-4 font-medium">Trend (SMAs)</th>
@@ -115,7 +128,7 @@
                     <tbody id="resultsTable" class="divide-y divide-gray-700 text-sm">
                         <!-- Rows will be injected here -->
                         <tr>
-                            <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                            <td colspan="7" class="px-6 py-12 text-center text-gray-500">
                                 Click "Scan Market" to find opportunities.
                             </td>
                         </tr>
@@ -128,6 +141,7 @@
     <script>
         // State
         let currentResults = [];
+        let selectedTickers = new Set();
         let isScanning = false;
         let abortController = null;
 
@@ -146,13 +160,16 @@
             // Reset UI
             isScanning = true;
             currentResults = []; // Clear previous
+            selectedTickers.clear();
+            updateDownloadButton();
+            document.getElementById('selectAll').checked = false;
             abortController = new AbortController();
 
             btn.disabled = true;
             btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Stop Scan`;
             btn.onclick = stopScan; // Change button action
 
-            table.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400 animate-pulse">Initializing scan...</td></tr>`;
+            table.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400 animate-pulse">Initializing scan...</td></tr>`;
             scannedCountEl.innerText = "0";
             matchCountEl.innerText = "0";
 
@@ -215,7 +232,7 @@
                     console.log("Scan aborted by user.");
                 } else {
                     console.error("Scan failed:", error);
-                    table.innerHTML += `<tr><td colspan="6" class="px-6 py-4 text-center text-red-400">Scan interrupted by error.</td></tr>`;
+                    table.innerHTML += `<tr><td colspan="7" class="px-6 py-4 text-center text-red-400">Scan interrupted by error.</td></tr>`;
                 }
             } finally {
                 // Reset State
@@ -225,7 +242,7 @@
                 btn.onclick = runScan; // Reset button action
 
                 if (currentResults.length === 0) {
-                    table.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">No opportunities found.</td></tr>`;
+                    table.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-gray-500">No opportunities found.</td></tr>`;
                 }
             }
         }
@@ -298,7 +315,13 @@
                 else volColor = 'text-yellow-400';
 
                 html += `
-                <tr class="hover:bg-gray-800/50 transition-colors animate-fade-in-up border-b border-gray-800 last:border-0">
+                <tr class="hover:bg-gray-800/50 transition-colors animate-fade-in-up border-b border-gray-800 last:border-0" id="row-${stock.Ticker}">
+                    <td class="px-6 py-4">
+                        <input type="checkbox" 
+                            value="${stock.Ticker}"
+                            onchange="toggleSelection('${stock.Ticker}')"
+                            class="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800 transition-colors cursor-pointer select-checkbox">
+                    </td>
                     <td class="px-6 py-4">
                         <div class="font-bold text-white text-base">${stock.Ticker}</div>
                         
@@ -327,6 +350,101 @@
 
             // Insert HTML
             table.insertAdjacentHTML('beforeend', html);
+        }
+
+        function toggleSelection(ticker) {
+            if (selectedTickers.has(ticker)) {
+                selectedTickers.delete(ticker);
+            } else {
+                selectedTickers.add(ticker);
+            }
+            updateDownloadButton();
+
+            // Update Select All state check
+            const allCheckboxes = document.querySelectorAll('.select-checkbox');
+            const selectAllCbx = document.getElementById('selectAll');
+            if (allCheckboxes.length > 0) {
+                selectAllCbx.checked = selectedTickers.size === currentResults.length;
+            }
+        }
+
+        function toggleAll() {
+            const selectAllCbx = document.getElementById('selectAll');
+            const isChecked = selectAllCbx.checked;
+
+            const checkboxes = document.querySelectorAll('.select-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = isChecked;
+                if (isChecked) {
+                    selectedTickers.add(cb.value);
+                } else {
+                    selectedTickers.delete(cb.value);
+                }
+            });
+            updateDownloadButton();
+        }
+
+        function updateDownloadButton() {
+            const btn = document.getElementById('downloadBtn');
+            const countBadge = document.getElementById('selectedCount');
+            const count = selectedTickers.size;
+
+            if (count > 0) {
+                btn.disabled = false;
+                countBadge.innerText = count;
+                countBadge.classList.remove('hidden');
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btn.disabled = true;
+                countBadge.classList.add('hidden');
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function downloadCSV() {
+            if (selectedTickers.size === 0) return;
+
+            // Filter results
+            const selectedData = currentResults.filter(s => selectedTickers.has(s.Ticker));
+
+            if (selectedData.length === 0) return;
+
+            // Define Headers
+            const headers = ['Date', 'Ticker', 'Price', 'SMA_50', 'SMA_200', 'RSI', 'HV_Rank'];
+
+            // Build CSV Content
+            const csvRows = [];
+
+            // Add Header Row
+            csvRows.push(headers.join(','));
+
+            const today = new Date().toISOString().split('T')[0];
+
+            // Add Data Rows
+            selectedData.forEach(row => {
+                const values = [
+                    today,
+                    row.Ticker,
+                    row.Close ? row.Close.toFixed(2) : '',
+                    row.SMA_50 ? row.SMA_50.toFixed(2) : '',
+                    row.SMA_200 ? row.SMA_200.toFixed(2) : '',
+                    row.RSI ? row.RSI.toFixed(2) : '',
+                    row.HV_Rank ? row.HV_Rank.toFixed(2) : ''
+                ];
+                csvRows.push(values.join(','));
+            });
+
+            // Blob & Download
+            const csvString = csvRows.join('\n');
+            const blob = new Blob([csvString], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `options_watch_export_${timestamp}.csv`);
+            a.click();
+            window.URL.revokeObjectURL(url);
         }
     </script>
 </body>

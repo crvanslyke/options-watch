@@ -10,6 +10,7 @@ Deployed on **Vercel** + **FastAPI**.
 - **Trend "Gatekeeper"**: Filters for stocks in a confirmed uptrend (Price > SMA50 & SMA200).
 - **Setup Detector**: Identifies "Pullbacks" within the trend using RSI (40-60).
 - **Volatility Analysis**: Color-coded categorization of Historical Volatility to help select the right option strategy.
+- **Export to CSV**: Select specific results and download them as a CSV file for detailed analysis.
 
 ## 📖 User Guide
 
