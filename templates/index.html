@@ -83,7 +83,8 @@
 
         <div class="mb-8">
             <h1 class="text-3xl font-bold tracking-tight mb-2">Call Option Opportunities</h1>
-            <p class="text-gray-400">Scanning NASDAQ 100 for high-probability setups (Liquidity + Trend + Pullback).</p>
+            <p class="text-gray-400">Scanning S&P 500 & NASDAQ 100 for high-probability setups (Liquidity + Trend +
+                Pullback).</p>
         </div>
 
         <!-- Metrics Grid -->
@@ -117,11 +118,31 @@
                                 <input type="checkbox" id="selectAll" onclick="toggleAll()"
                                     class="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800 transition-colors cursor-pointer">
                             </th>
-                            <th class="px-6 py-4 font-medium">Ticker</th>
-                            <th class="px-6 py-4 font-medium">Price</th>
-                            <th class="px-6 py-4 font-medium">Trend (SMAs)</th>
-                            <th class="px-6 py-4 font-medium">RSI (14)</th>
-                            <th class="px-6 py-4 font-medium">Vol (20d)</th>
+                            <th class="px-6 py-4 font-medium cursor-pointer hover:text-white group select-none"
+                                onclick="sortTable('Ticker')">
+                                <div class="flex items-center gap-1">Ticker <span id="sort-Ticker"
+                                        class="text-gray-600 group-hover:text-gray-400"></span></div>
+                            </th>
+                            <th class="px-6 py-4 font-medium cursor-pointer hover:text-white group select-none"
+                                onclick="sortTable('Price')">
+                                <div class="flex items-center gap-1">Price <span id="sort-Price"
+                                        class="text-gray-600 group-hover:text-gray-400"></span></div>
+                            </th>
+                            <th class="px-6 py-4 font-medium cursor-pointer hover:text-white group select-none"
+                                onclick="sortTable('Trend')">
+                                <div class="flex items-center gap-1">Trend <span id="sort-Trend"
+                                        class="text-gray-600 group-hover:text-gray-400"></span></div>
+                            </th>
+                            <th class="px-6 py-4 font-medium cursor-pointer hover:text-white group select-none"
+                                onclick="sortTable('RSI')">
+                                <div class="flex items-center gap-1">RSI (14) <span id="sort-RSI"
+                                        class="text-gray-600 group-hover:text-gray-400"></span></div>
+                            </th>
+                            <th class="px-6 py-4 font-medium cursor-pointer hover:text-white group select-none"
+                                onclick="sortTable('Vol')">
+                                <div class="flex items-center gap-1">Vol (20d) <span id="sort-Vol"
+                                        class="text-gray-600 group-hover:text-gray-400"></span></div>
+                            </th>
                             <th class="px-6 py-4 font-medium text-right">Action</th>
                         </tr>
                     </thead>
@@ -144,6 +165,8 @@
         let selectedTickers = new Set();
         let isScanning = false;
         let abortController = null;
+        let sortCol = null;
+        let sortAsc = true;
 
         document.addEventListener('DOMContentLoaded', () => {
             // Populate selector (optional future step, simplified for now)
@@ -178,7 +201,10 @@
                 // Default to SP500 for now, or make user selectable
                 const tickersResp = await fetch('/api/tickers');
                 const tickersData = await tickersResp.json();
-                const allTickers = tickersData.sp_500; // Using Broadest list default
+
+                // Combine and deduplicate lists
+                const combined = [...new Set([...tickersData.sp_500, ...tickersData.nasdaq_100])];
+                const allTickers = combined;
                 const totalTickers = allTickers.length;
 
                 // 2. Clear Table for streaming
@@ -320,6 +346,7 @@
                         <input type="checkbox" 
                             value="${stock.Ticker}"
                             onchange="toggleSelection('${stock.Ticker}')"
+                            ${selectedTickers.has(stock.Ticker) ? 'checked' : ''}
                             class="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800 transition-colors cursor-pointer select-checkbox">
                     </td>
                     <td class="px-6 py-4">
@@ -445,6 +472,66 @@
             a.setAttribute('download', `options_watch_export_${timestamp}.csv`);
             a.click();
             window.URL.revokeObjectURL(url);
+        }
+
+        function sortTable(column) {
+            if (sortCol === column) {
+                sortAsc = !sortAsc;
+            } else {
+                sortCol = column;
+                sortAsc = true; // Default to ascending first? Or descending for "Good stuff"?
+                // Let's default to Descending for "Trend", "Vol", "Price" (High to Low usually better)
+                // Ascending for Ticker
+                if (['Trend', 'Price', 'Vol'].includes(column)) {
+                    sortAsc = false;
+                }
+            }
+
+            // Perform Sort
+            currentResults.sort((a, b) => {
+                let valA, valB;
+
+                switch (column) {
+                    case 'Ticker':
+                        valA = a.Ticker;
+                        valB = b.Ticker;
+                        break;
+                    case 'Price':
+                        valA = a.Close || 0;
+                        valB = b.Close || 0;
+                        break;
+                    case 'Trend':
+                        // (Price / SMA50)
+                        valA = (a.Close && a.SMA_50) ? (a.Close / a.SMA_50) : -1;
+                        valB = (b.Close && b.SMA_50) ? (b.Close / b.SMA_50) : -1;
+                        break;
+                    case 'RSI':
+                        valA = a.RSI || 0;
+                        valB = b.RSI || 0;
+                        break;
+                    case 'Vol':
+                        valA = a.HV_Rank || 0;
+                        valB = b.HV_Rank || 0;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (valA < valB) return sortAsc ? -1 : 1;
+                if (valA > valB) return sortAsc ? 1 : -1;
+                return 0;
+            });
+
+            // Update UI Icons
+            document.querySelectorAll('[id^="sort-"]').forEach(el => el.innerHTML = '');
+            const icon = sortAsc ? '▲' : '▼';
+            const iconEl = document.getElementById(`sort-${column}`);
+            if (iconEl) iconEl.innerHTML = icon;
+
+            // Re-render
+            const tableBody = document.getElementById('resultsTable');
+            tableBody.innerHTML = '';
+            appendResults(currentResults);
         }
     </script>
 </body>
